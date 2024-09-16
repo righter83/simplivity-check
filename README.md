@@ -1,8 +1,10 @@
-# simplivity-plugins-nagios
-Nagios Plugins to check HP SIMPLIVITY Hyperconverged system .
+# Info
+This scripts has been forked. 
+Initially it was desgined for Nagios. I rewrote it to run via crontab and Errors are beeing reported over Mail.
+It uses a config file.
+I updated it to be able to run with Pyhton 3 and added some error handling
 
-Api auth need to be written in authfile.json file, hard path is written in each script.
 
+# Configuration
 
-Example for /simplivity-hard.py 
-  simplivity-hard.py -O 10.10.10.1 -C ClusterNAME
+# How to use

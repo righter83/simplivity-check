@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import sys
 import os
@@ -62,7 +62,7 @@ def connect_api():
 #--------------------------------------------------------------------	
 
 def output_nagios(return_msg, return_perfdata, return_code):
-	print return_msg
+	print(return_msg)
 	sys.exit(return_code)
 
 #--------------------------------------------------------------------
@@ -85,43 +85,43 @@ def get_host():
 		print('Failed to get host state')
 
 
-def get_backup_state():
 
-	Number_backups = 0
-	Errors = 0
-	Backup_error = ''
-	connect_api()
-	get_host()
 
-	response = requests.get(url+'backups', verify=False, headers=headers)
-	Backups = dict()
-	Backups = response.json()['backups']
-	for Backup in Backups:
-		Number_backups += 1
-		if Backup['state'] != 'PROTECTED':
-			Errors += 1
-			# Limit list to 10 lines
-			if Errors > 0:
-				Backup_error += Backup['virtual_machine_name'] + ' backup status: ' + Backup['state'] + '\n'
-	
-	if Errors == 0:
-		return_msg = str(Number_backups) + ' backups with the status OK'
-		output_nagios(return_msg,'',return_code['OK'])
-	elif Errors > 0:
-		return_msg = Backup_error
-		output_nagios(return_msg,'',return_code['WARNING'])
-	else:
-		return_msg = 'Backup unknown'
+def get_host_hardware_state():
+	try:
+		
+		global return_msg
+		
+		connect_api()
+		get_host()
+		
+		response = requests.get(url+'hosts/'+Host['id']+'/hardware', verify=False, headers=headers)
+		
+		Hardware = dict()
+		Hardware = response.json()['host']
+		
+		if Hardware['status'] == 'GREEN':
+			return_msg = 'The hardware status of ' + Host['name'] + ' is: ' + Hardware['status']
+			output_nagios(return_msg,'',return_code['OK'])
+		elif Hardware['status'] == 'YELLOW':
+			return_msg = 'The hardware status of ' + Host['name'] + ' is: ' + Hardware['status']
+			output_nagios(return_msg,'',return_code['WARNING'])
+		elif Hardware['status'] == 'RED':
+			return_msg = 'The hardware status of ' + Host['name'] + ' is: ' + Hardware['status']
+			output_nagios(return_msg,'',return_code['CRITICAL'])
+		else:
+			return_msg = 'The hardware status of ' + Host['name'] + ' is: ' + Hardware['status']
+			output_nagios(return_msg,'',return_code['UNKNOWN'])
+		
+	except KeyError:
+		return_msg = 'Status unknown'
 		output_nagios(return_msg,'',return_code['UNKNOWN'])
-
-
-
 
 #--------------------------------------------------------------------
 
 def main():
 
-	get_backup_state()
+	get_host_hardware_state()
 
 # Start program
 if __name__ == "__main__":

@@ -1,117 +1,118 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import sys
 import os
 import requests
 import datetime
-import optparse
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import json
+import smtplib
+import configparser
+from configobj import ConfigObj
+import pathlib
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-######################################################################
-# Parse Arguments
-parser 		= optparse.OptionParser()
-parser.add_option('-O', '--omnistack', help='IP of the OmniStack host', dest='arg_ominstack', type='string')
-parser.add_option('-F', '--authfile', help='Json authfile user & password', dest='arg_authfile', type='string')
-# parser.add_option('-U', '--username', help='OmniStack username (user@domain)', dest='arg_username', type='string')
-# parser.add_option('-P', '--password', help='OmniStack password', dest='arg_password', type='string')
 
-(opts, args) = parser.parse_args()
-
-######################################################################
-# Set the base URL for REST API requests.
-global OVC_IP
-OVC_IP = opts.arg_ominstack
-url = 'https://'+OVC_IP+'/api/'
-
-authfile=opts.arg_authfile
-with open('./auth_simplivity.json') as json_data_file:
-    data = json.load(json_data_file)
-username=data['simplivity']['user']
-password=data['simplivity']['passwd']
-
-# Set Nagios data
-return_code 	= { 'OK': 0, 'WARNING': 1, 'CRITICAL': 2, 'UNKNOWN': 3 }
-return_msg 		= ''
-return_perfdata = ''
-hosts_excluded	= ''
+#### read config
+config=ConfigObj("/starscripts/simplivity-check/config.cfg")
+username=config['username']
+password=config['password']
+mailserver=config['mailserver']
+rcpt=config['rcpt']
+servers=config['hosts']
+smtp=smtplib.SMTP(mailserver)
+problem=0
+alert=''
 
 ######################################################################
 # Functions
-
-def connect_api():	
+def connect_api():
+	global alert
+	global problem
 	try:
-	
 		# Authenticate user and generate access token.
 		response = requests.post(url+'oauth/token', auth=('simplivity', ''), verify=False, data={
 		  'grant_type':'password',
 		  'username':username,
 		  'password':password})
 		access_token = response.json()['access_token']
-		
-		
+
 		# Add the access_token to the header.
 		global headers
-		headers = {'Authorization':  'Bearer ' + access_token, 'Accept' : 'application/vnd.simplivity.v1+json'}		
+		headers = {'Authorization':  'Bearer ' + access_token, 'Accept' : 'application/vnd.simplivity.v1+json'}
 
 	except requests.exceptions.ConnectionError:
-		print('Can not connect to host, please check IP address or hostname')
+		print('Can not connect to Simplivity host '+server)
+		alert+='Can not connect to Simplivity host '+server+'\n'
+		problem=1
 	except KeyError:
-		print('Username or password error, please check and retry')
-
-#--------------------------------------------------------------------	
-
-def output_nagios(return_msg, return_perfdata, return_code):
-	print return_msg
-	sys.exit(return_code)
+		print('Username or password is wrong for Simplivity host '+server)
+		alert+='Username or password is wrong for Simplivity host '+server+'\n'
+		problem=1
 
 #--------------------------------------------------------------------
 
 def get_host():
+	global alert
+	global problem
 	try:
-		
 		global Host
-		
+		global server
 		connect_api()
-		response = requests.get(url+'hosts', verify=False, headers=headers)
-		Hosts = dict()
-		Hosts = response.json()['hosts']
-
-		for Host in Hosts:
-			if Host['management_ip'] == OVC_IP:
-				return Host
+		try:
+			response = requests.get(url+'hosts', verify=False, headers=headers)
+			Hosts = dict()
+			Hosts = response.json()['hosts']
+			for Host in Hosts:
+				if Host['management_ip'] == server:
+					return Host
+		except:
+			Host= {
+					"state": "Offline",
+					}
+			return Host
 
 	except KeyError:
 		print('Failed to get host state')
-
-
+		alert='Failed to get Simplivity host state\n'
+		problem=1
 
 def get_host_state():
+	global alert
+	global problem
 	try:
-		
 		global return_msg
-		
 		connect_api()
 		get_host()
-		
 		if Host['state'] == 'ALIVE':
 			return_msg = 'The node: ' + Host['name'] + ' is in state: ' + Host['state']
-			output_nagios(return_msg,'',return_code['OK'])
+			print(return_msg)
 		elif Host['state'] == 'FAILED':
-			return_msg = 'Le noeud: ' + Host['name'] + ' is in state: ' + Host['state']
-			output_nagios(return_msg,'',return_code['CRITICAL'])
+			return_msg = 'The node: ' + Host['name'] + ' is in state: ' + Host['state']
+			alert+=return_msg
+			problem=1
 		else:
-			return_msg = 'Le noeud: ' + Host['name'] + ' is in state: ' + Host['state']
-			output_nagios(return_msg,'',return_code['UNKNOWN'])
-		
+			return_msg = 'The node: ' + Host['name'] + ' is in state: ' + Host['state']
+			alert+=return_msg
+			problem=1
+
 	except KeyError:
-		print('Failed to get host state')
+		print('Failed to get Simplivity host state '+server)
+		alert+='Failed to get Simplivity host state '+server+'\n'
+		problem=1
 
 #--------------------------------------------------------------------
 
 def main():
-
-	get_host_state()
+	global url
+	global server
+	global rcpt,mailserver,alert
+	for server in servers:
+		url = 'https://'+server+'/api/'
+		get_host_state()
+	if problem == 1:
+		alert+="\n\nScript CheckMK:/starscripts/simplivity-check/simplivity-host-state.py"
+		smtp=smtplib.SMTP(mailserver)
+		smtp.sendmail(rcpt, rcpt, alert)
 
 # Start program
 if __name__ == "__main__":
