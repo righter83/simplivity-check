@@ -17,7 +17,10 @@ config=ConfigObj("/starscripts/simplivity-check/config.cfg")
 username=config['username']
 password=config['password']
 mailserver=config['mailserver']
+splitrcpt=config['splitrcpt']
 rcpt=config['rcpt']
+rcptram=config['rcptram']
+rcptboe=config['rcptboe']
 servers=config['hosts']
 smtp=smtplib.SMTP(mailserver)
 problem=0
@@ -112,7 +115,14 @@ def main():
 	if problem == 1:
 		alert+="\n\nScript CheckMK:/starscripts/simplivity-check/simplivity-host-state.py"
 		smtp=smtplib.SMTP(mailserver)
-		smtp.sendmail(rcpt, rcpt, alert)
+		if "1" in splitrcpt:
+			if "253" in alert:
+				smtp.sendmail(rcptram, rcptram, alert)
+			if "117" in alert:
+				smtp.sendmail(rcptboe, rcptboe, alert)
+		else:
+			smtp.sendmail(rcpt, rcpt, alert)
+
 
 # Start program
 if __name__ == "__main__":

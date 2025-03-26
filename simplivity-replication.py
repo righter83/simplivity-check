@@ -16,7 +16,9 @@ config=ConfigObj("/starscripts/simplivity-check/config.cfg")
 username=config['username']
 password=config['password']
 mailserver=config['mailserver']
-rcpt=config['rcpt']
+splitrcpt=config['splitrcpt']
+rcptram=config['rcptram']
+rcptboe=config['rcptboe']
 servers=config['hosts']
 problem=0
 alert=''
@@ -84,18 +86,15 @@ def get_replication_state():
 	Replication_error=''
 
 	for VM in VMs:
-		#print(VM['id'])
-		#if VM['host_id'] == Host['id']: !!! disabled this because it was not queriyng all VMs
 		response = requests.get(url+'virtual_machines/'+VM['id'], verify=False, headers=headers)
 		VM_detail = dict()
 		VM_detail = response.json()['virtual_machine']
-		print(VM['name'] + ' has status ha: ' + VM_detail['ha_status'])
-		#print VM_detail['ha_status']
+		print(VM['name'] + ' has status ha: ' + VM_detail['ha_status'] + ' on Cluster ' + VM['omnistack_cluster_name'])
 
 		if VM_detail['ha_status'] != 'SAFE':
 			Errors += 1
 			if Errors >0:
-				Replication_error += 'The storage HA status of ' + VM['name'] + ' is: ' + VM_detail['ha_status'] + '\n'
+				Replication_error += 'The storage HA status of ' + VM['name'] + ' is: ' + VM_detail['ha_status'] + ' on Cluster ' + VM['omnistack_cluster_name'] + '\n'
 
 	if Errors == 0:
 		return_msg = 'The storage HA status of all VMs is OK.'
@@ -116,11 +115,15 @@ def main():
 		break # check only on one host
 	print(problem)
 	if problem == 1:
-		alert+="\n\nScript CheckMK:/starscripts/simplivity-check/simplivity-replication-state.py"
+		alert+="\n\nScript CheckMK:/starscripts/simplivity-check/simplivity-replication.py"
 		smtp=smtplib.SMTP(mailserver)
-		smtp.sendmail(rcpt, rcpt, alert)
-		print("ok")
-
+		if "1" in splitrcpt:
+			if "stram" in alert:
+				smtp.sendmail(rcptram, rcptram, alert)
+			if "stboe" in alert:
+				smtp.sendmail(rcptboe, rcptboe, alert)
+		else:
+			smtp.sendmail(rcpt, rcpt, alert)
 
 # Start program
 if __name__ == "__main__":
